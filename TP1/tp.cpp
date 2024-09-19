@@ -21,6 +21,7 @@
 #include <string>
 #include <cstdio>
 #include <cstdlib>
+#include <random>
 
 #include <algorithm>
 #include <GL/glut.h>
@@ -337,7 +338,7 @@ enum KernelType {
     Wendland
 };
 
-double SingularWeight(Vec3 const &inputPoint, Vec3 const &neighbor, double radius, int s = 2) {
+double SingularWeight(Vec3 const &inputPoint, Vec3 const &neighbor, double radius, double s = 0.6) {
     double d = Vec3::euclideanDistance(inputPoint, neighbor);
     return pow(radius / d, s);
 }
@@ -352,7 +353,7 @@ double WendlandWeight(Vec3 const &inputPoint, Vec3 const &neighbor, double radiu
     return pow(1 - (d / radius),4) * (1 + 4 * (d / radius));
 }
 
-void SPSS(Vec3 inputPoint, Vec3 &outputPoint, Vec3& outputNormal, std::vector<Vec3> const &positions, std::vector<Vec3> const &normals, BasicANNkdTree const &kdtree, KernelType kernel_type, float radius, unsigned int nbIterations = 100, unsigned int knn = 200) {
+void SPSS(Vec3 inputPoint, Vec3 &outputPoint, Vec3& outputNormal, std::vector<Vec3> const &positions, std::vector<Vec3> const &normals, BasicANNkdTree const &kdtree, KernelType kernel_type, float radius, unsigned int nbIterations = 10, unsigned int knn = 200) {
     for(unsigned int i = 0; i < nbIterations; ++i) {
         ANNidxArray id_nearest_neighbors = new ANNidx[knn];
         ANNdistArray square_distances_to_neighbors = new ANNdist[knn];
@@ -423,6 +424,16 @@ void HPSS(Vec3 inputPoint, Vec3 &outputPoint, Vec3& outputNormal, std::vector<Ve
     }
 }
 
+void noiseAlongNormal(std::vector<Vec3> &points, std::vector<Vec3> &normals, double range) {
+    std::mt19937 rng(time(NULL));
+    std::uniform_real_distribution<double> gen(-range,range);
+    for(int i = 0; i < points.size(); ++i) {
+        double randomNumber = gen(rng);
+        points[i] = points[i] + randomNumber * normals[i];
+    }
+
+}
+
 int main (int argc, char ** argv) {
     if (argc > 2) {
         exit (EXIT_FAILURE);
@@ -445,6 +456,9 @@ int main (int argc, char ** argv) {
         // Load a first pointset, and build a kd-tree:
         loadPN("pointsets/dino.pn" , positions , normals);
 
+        // Disturb points
+        noiseAlongNormal(positions, normals, 1);
+
         BasicANNkdTree kdtree;
         kdtree.build(positions);
 
@@ -465,12 +479,17 @@ int main (int argc, char ** argv) {
         // SPSS
         for(unsigned int pIt = 0 ; pIt < positions2.size() ; ++pIt ) {
             Vec3 outputPoint, outputNormal;
-            SPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Singular, 10);
+            SPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Gaussian, 0.05, 10, 100);
             positions2[pIt] = outputPoint;
             normals2[pIt] = outputNormal; 
         }
         // HPSS
-
+        // for(unsigned int pIt = 0 ; pIt < positions2.size() ; ++pIt ) {
+        //     Vec3 outputPoint, outputNormal;
+        //     HPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Singular, 0.5);
+        //     positions2[pIt] = outputPoint;
+        //     normals2[pIt] = outputNormal; 
+        // }
         // APSS
         // TODO
     }
