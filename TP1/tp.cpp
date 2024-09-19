@@ -14,6 +14,7 @@
 // purpose.
 // -------------------------------------------
 
+#include <cmath>
 #include <iostream>
 #include <fstream>
 #include <vector>
@@ -329,8 +330,11 @@ void reshape(int w, int h) {
 }
 
 Vec3 projectOnPlane(Vec3 &inputPoint, const Vec3 &planePoint, const Vec3 &planeNormal) {
-    return inputPoint - ((Vec3::dot(inputPoint - planePoint, planeNormal) / planeNormal.length()) * planeNormal);
+    Vec3 normalizedNormal = planeNormal;
+    normalizedNormal.normalize();
+    return inputPoint - (Vec3::dot(inputPoint - planePoint, normalizedNormal) * normalizedNormal);
 }
+
 
 enum KernelType {
     Singular,
@@ -338,7 +342,7 @@ enum KernelType {
     Wendland
 };
 
-double SingularWeight(Vec3 const &inputPoint, Vec3 const &neighbor, double radius, double s = 0.6) {
+double SingularWeight(Vec3 const &inputPoint, Vec3 const &neighbor, double radius, double s = 2) {
     double d = Vec3::euclideanDistance(inputPoint, neighbor);
     return pow(radius / d, s);
 }
@@ -429,9 +433,8 @@ void noiseAlongNormal(std::vector<Vec3> &points, std::vector<Vec3> &normals, dou
     std::uniform_real_distribution<double> gen(-range,range);
     for(int i = 0; i < points.size(); ++i) {
         double randomNumber = gen(rng);
-        points[i] = points[i] + randomNumber * normals[i];
+        points[i] += randomNumber * normals[i];
     }
-
 }
 
 int main (int argc, char ** argv) {
@@ -455,15 +458,29 @@ int main (int argc, char ** argv) {
     {
         // Load a first pointset, and build a kd-tree:
         loadPN("pointsets/dino.pn" , positions , normals);
+        
+        // Ici, j'ai essayé de créer un cercle pour reproduire l'exemple du cours entre SPSS et HPSS, mais je n'ai pas réussi à obtenir l'effet de comparaison escompté
+        // positions.resize(100);
+        // normals.resize(100);
+        // double r = 1;
+        // double step = (2 * M_PI) / positions.size();
+        // for(double i = 0; i < positions.size(); i++) {
+        //     double theta = i * step;
+        //     double x = r * cos(theta);
+        //     double y = r * sin(theta);
+        //     positions[i] = Vec3(x,y,0);
+        //     normals[i] = positions[i];
+        //     normals[i].normalize();
+        // }
 
         // Disturb points
-        noiseAlongNormal(positions, normals, 1);
+        noiseAlongNormal(positions, normals, 0.05);
 
         BasicANNkdTree kdtree;
         kdtree.build(positions);
 
         // Create a second pointset that is artificial, and project it on pointset1 using MLS techniques:
-        positions2.resize( 20000 );
+        positions2.resize( 100000 );
         normals2.resize(positions2.size());
         for(unsigned int pIt = 0 ; pIt < positions2.size() ; ++pIt ) {
             positions2[pIt] = Vec3(
@@ -474,22 +491,22 @@ int main (int argc, char ** argv) {
             positions2[pIt].normalize();
             positions2[pIt] = 0.6 * positions2[pIt];
         }
-
+        
         // PROJECT USING MLS (HPSS and APSS):
         // SPSS
-        for(unsigned int pIt = 0 ; pIt < positions2.size() ; ++pIt ) {
-            Vec3 outputPoint, outputNormal;
-            SPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Gaussian, 0.05, 10, 100);
-            positions2[pIt] = outputPoint;
-            normals2[pIt] = outputNormal; 
-        }
-        // HPSS
         // for(unsigned int pIt = 0 ; pIt < positions2.size() ; ++pIt ) {
         //     Vec3 outputPoint, outputNormal;
-        //     HPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Singular, 0.5);
+        //     HPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Wendland, 0.05, 10, 200);
         //     positions2[pIt] = outputPoint;
         //     normals2[pIt] = outputNormal; 
         // }
+        //HPSS
+        for(unsigned int pIt = 0 ; pIt < positions2.size() ; ++pIt ) {
+            Vec3 outputPoint, outputNormal;
+            HPSS(positions2[pIt], outputPoint, outputNormal, positions, normals, kdtree, Wendland, 0.5);
+            positions2[pIt] = outputPoint;
+            normals2[pIt] = outputNormal; 
+        }
         // APSS
         // TODO
     }
