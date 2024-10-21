@@ -335,7 +335,6 @@ Vec3 projectOnPlane(Vec3 &inputPoint, const Vec3 &planePoint, const Vec3 &planeN
     return inputPoint - (Vec3::dot(inputPoint - planePoint, normalizedNormal) * normalizedNormal);
 }
 
-
 enum KernelType {
     Singular,
     Gaussian,
